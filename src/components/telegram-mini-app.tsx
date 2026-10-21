@@ -156,7 +156,20 @@ function TelegramMiniAppInner() {
 
     const storedInitData = window.sessionStorage.getItem(TG_INIT_DATA_KEY) ?? "";
     const resolvedInitData =
-      tgWebApp?.initData || storedInitData || buildDevPreviewInitData();
+      tgWebApp?.initData ||
+      (process.env.NODE_ENV !== "production" ? storedInitData || buildDevPreviewInitData() : "");
+
+    if (!resolvedInitData) {
+      window.sessionStorage.removeItem(TG_INIT_DATA_KEY);
+      const missingInitDataTimer = window.setTimeout(() => {
+        setIsMiniApp(true);
+        setInitDataRaw("");
+        setTgUser(null);
+        setAuthState("error");
+        setAuthError("Telegram не передал данные запуска. Откройте Mini App через кнопку в чате с ботом.");
+      }, 0);
+      return () => window.clearTimeout(missingInitDataTimer);
+    }
 
     window.sessionStorage.setItem(TG_INIT_DATA_KEY, resolvedInitData);
     const miniAppStateTimer = window.setTimeout(() => {

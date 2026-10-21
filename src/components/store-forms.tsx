@@ -2,8 +2,9 @@
 
 import { CheckCircle, CloudArrowUp, Trash } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GoogleSignInButton } from "@/components/google-sign-in";
+import { ProfileAvatar } from "@/components/profile-avatar";
 import { useStore, type StoreUser } from "@/components/store-provider";
 
 export function StoreNote({ children }: { children: React.ReactNode }) {
@@ -268,19 +269,68 @@ export function CheckoutForm({
 export function SettingsForm() {
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarFilename, setAvatarFilename] = useState("");
+  const [avatarError, setAvatarError] = useState("");
+  const [savedAvatarUnavailable, setSavedAvatarUnavailable] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const avatarObjectUrlRef = useRef<string | null>(null);
   const { user, setAuthenticatedUser } = useStore();
+
+  useEffect(() => () => {
+    if (avatarObjectUrlRef.current) URL.revokeObjectURL(avatarObjectUrlRef.current);
+  }, []);
+
+  function clearAvatarPreview(clearInput = true) {
+    if (avatarObjectUrlRef.current) URL.revokeObjectURL(avatarObjectUrlRef.current);
+    avatarObjectUrlRef.current = null;
+    setAvatarPreview(null);
+    setAvatarFilename("");
+    if (clearInput && avatarInputRef.current) avatarInputRef.current.value = "";
+  }
+
+  function handleAvatarChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    clearAvatarPreview(false);
+    setAvatarError("");
+
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      event.currentTarget.value = "";
+      setAvatarError("Размер изображения должен быть до 2 МБ.");
+      return;
+    }
+
+    if (file.type && !["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      event.currentTarget.value = "";
+      setAvatarError("Выберите изображение JPEG, PNG или WebP.");
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    avatarObjectUrlRef.current = previewUrl;
+    setAvatarPreview(previewUrl);
+    setAvatarFilename(file.name);
+    setSavedAvatarUnavailable(false);
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!user || saving) return;
-    setSaving(true);
-    setMessage("");
 
     const formData = new FormData(event.currentTarget);
     const name = String(formData.get("name") ?? "").trim();
     const phone = String(formData.get("phone") ?? "").trim();
     const newPassword = String(formData.get("password") ?? "");
     const avatarFile = formData.get("avatar");
+
+    if (avatarFile instanceof File && avatarFile.size > 2 * 1024 * 1024) {
+      setAvatarError("Размер изображения должен быть до 2 МБ.");
+      return;
+    }
+
+    setSaving(true);
+    setMessage("");
 
     try {
       const profileResponse = await fetch("/api/account/profile", {
@@ -305,6 +355,7 @@ export function SettingsForm() {
       }
 
       let updatedAvatarKey = profileData.profile?.avatarKey ?? user.avatarKey ?? null;
+      let uploadedAvatar = false;
 
       if (avatarFile instanceof File && avatarFile.size > 0) {
         const uploadData = new FormData();
@@ -323,6 +374,8 @@ export function SettingsForm() {
           return;
         }
         updatedAvatarKey = avatarJson.avatarKey ?? null;
+        uploadedAvatar = true;
+        setSavedAvatarUnavailable(false);
       }
 
       setAuthenticatedUser({
@@ -331,6 +384,7 @@ export function SettingsForm() {
         phone: phone || null,
         avatarKey: updatedAvatarKey,
       });
+      if (uploadedAvatar) clearAvatarPreview();
       setMessage("Настройки профиля сохранены на сервере.");
     } catch {
       setMessage("Ошибка соединения при сохранении профиля.");
@@ -345,6 +399,8 @@ export function SettingsForm() {
       const response = await fetch("/api/account/avatar", { method: "DELETE" });
       if (response.ok) {
         setAuthenticatedUser({ ...user, avatarKey: null });
+        clearAvatarPreview();
+        setSavedAvatarUnavailable(false);
         setMessage("Фото профиля удалено.");
       }
     } catch {
@@ -356,7 +412,33 @@ export function SettingsForm() {
     <label>Имя<input name="name" defaultValue={user?.name ?? ""} autoComplete="name" /></label>
     <label>Телефон<input name="phone" type="tel" defaultValue={user?.phone ?? ""} placeholder="+998 90 000 00 00" autoComplete="tel" /></label>
     <label>Новый пароль<input name="password" type="password" placeholder="Не короче 8 символов" minLength={8} /></label>
-    <label className="upload-field">Фото профиля (JPEG, PNG, WebP до 2 МБ)<span><CloudArrowUp size={18} /> {user?.avatarKey ? `Загружено: ${user.avatarKey}` : "Выберите изображение"}<input name="avatar" type="file" accept="image/png,image/jpeg,image/webp" /></span></label>
+    <div className="avatar-settings-preview">
+      <ProfileAvatar
+        name={user?.name ?? "Профиль"}
+        avatarKey={user?.avatarKey}
+        src={avatarPreview}
+        size={76}
+        preview={Boolean(avatarPreview)}
+        onImageError={() => setSavedAvatarUnavailable(true)}
+      />
+      <div className="avatar-settings-copy" aria-live="polite">
+        <strong>{avatarPreview ? "Предпросмотр нового фото" : "Фото профиля"}</strong>
+        <p>
+          {avatarPreview
+            ? "После сохранения фото появится в вашем аккаунте."
+            : user?.avatarKey && !savedAvatarUnavailable
+              ? "Это фото видно в личном кабинете."
+              : "Фото пока не отображается. Выберите файл, чтобы загрузить его заново."}
+        </p>
+      </div>
+      {avatarPreview && (
+        <button className="button button-outline avatar-preview-cancel" type="button" onClick={() => clearAvatarPreview()}>
+          Отменить выбор
+        </button>
+      )}
+    </div>
+    <label className="upload-field">Фото профиля (JPEG, PNG, WebP до 2 МБ)<span><CloudArrowUp size={18} /> {avatarFilename || (user?.avatarKey ? "Выбрать другое фото" : "Выбрать изображение")}<input ref={avatarInputRef} name="avatar" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleAvatarChange} /></span></label>
+    {avatarError && <p className="form-message is-error" role="alert">{avatarError}</p>}
     <div className="hero-cta-row">
       <button className="button button-primary" type="submit" disabled={saving}>
         {saving ? "Сохраняем…" : "Сохранить изменения"}

@@ -302,6 +302,9 @@ img { display: block; }
 .content-panel h2 { margin: 0 0 16px; font-size: 19px; letter-spacing: -.035em; }
 .profile-summary { display: flex; align-items: center; gap: 14px; margin-bottom: 23px; }
 .avatar-placeholder { display: grid; width: 62px; height: 62px; place-items: center; border: 1px solid #cfdbf7; border-radius: 19px; background: #e7eefc; color: var(--blue); font-size: 23px; font-weight: 600; }
+.profile-avatar-frame { position: relative; display: block; flex: 0 0 auto; overflow: hidden; border: 1px solid #cfdbf7; background: #e7eefc; }
+.profile-avatar-fallback { position: absolute; inset: 0; }
+.profile-avatar-photo { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; object-fit: cover; transition: opacity .15s ease; }
 .profile-summary strong { display: block; }
 .profile-summary p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
 .account-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -377,7 +380,13 @@ img { display: block; }
 .payment-option small { margin-top: 2px; color: #8c969e; font-size: 9px; }
 .secure-checkout { display: flex; align-items: center; gap: 6px; margin: 14px 0 0; color: #728044; font-size: 10px; }
 .upload-field > span { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 42px; padding: 9px 11px; overflow: hidden; border: 1px dashed #cbd5df; border-radius: 9px; color: #627185; background: #fafbfc; cursor: pointer; }
+.upload-field > span:focus-within { outline: 2px solid var(--blue); outline-offset: 2px; }
 .upload-field input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.avatar-settings-preview { display: flex; align-items: center; gap: 14px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #fbfcfd; }
+.avatar-settings-copy { min-width: 0; }
+.avatar-settings-copy strong { display: block; color: var(--ink); font-size: 13px; }
+.avatar-settings-copy p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.avatar-preview-cancel { flex: 0 0 auto; margin-left: auto; }
 .checkout-item { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 9px; align-items: center; margin: 11px 0; color: #5f6d78; font-size: 11px; }
 .checkout-item-image { position: relative; width: 46px; height: 46px; overflow: hidden; border-radius: 8px; background: #f5f6f7; }
 .checkout-item-image img { object-fit: contain; padding: 4px; mix-blend-mode: multiply; }
@@ -686,6 +695,8 @@ img { display: block; }
   .comparison-product-name { font-size: 12px; }
   .comparison-product-price { font-size: 12px; }
   .profile-summary .sign-out-button { margin-left: 0; }
+  .avatar-settings-preview { flex-wrap: wrap; }
+  .avatar-preview-cancel { margin-left: 0; }
 }
 
 @keyframes page-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }

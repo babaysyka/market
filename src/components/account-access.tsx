@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowRight, SignOut, UserCircle } from "@phosphor-icons/react";
+import { ArrowRight, SignOut } from "@phosphor-icons/react";
 import { useEffect, useSyncExternalStore } from "react";
+import { ProfileAvatar } from "@/components/profile-avatar";
 import { useStore } from "@/components/store-provider";
 
 const subscribeHydration = () => () => {};
@@ -36,11 +37,10 @@ export function ProfileIdentity() {
   const { user, signOut } = useStore();
   const router = useRouter();
   if (!user) return null;
-  const initials = user.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toLocaleUpperCase("ru");
 
   return <>
     <div className="profile-summary">
-      <span className="avatar-placeholder" aria-label={"Профиль " + user.name}>{initials || <UserCircle size={25} />}</span>
+      <ProfileAvatar name={user.name} avatarKey={user.avatarKey} />
       <div><strong>{user.name}</strong><p>{user.email}</p></div>
       <button className="button button-outline sign-out-button" type="button" onClick={() => { signOut(); router.replace("/account/sign-in"); }}>
         <SignOut size={17} />Выйти

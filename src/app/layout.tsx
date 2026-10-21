@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "@fontsource-variable/golos-text/wght.css";
 import { SiteFooter, SiteHeader } from "@/components/site-shell";
 import { StoreProvider } from "@/components/store-provider";
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="ru" data-scroll-behavior="smooth">
     <body>
+      <Script src="https://telegram.org/js/telegram-web-app.js?63" strategy="beforeInteractive" />
       <StoreProvider>
         <TelegramMiniAppShell />
         <SiteHeader />

@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { getStore } from "@netlify/blobs";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
@@ -6,16 +7,17 @@ import { getDatabase } from "@/lib/db";
 import { profiles } from "@/lib/db/schema";
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2 MB
+const AVATAR_STORE = "profile-avatars";
+
+function isOwnedAvatarKey(key: string, userId: string) {
+  return key.startsWith(`avatars/${userId}/`);
+}
 
 export function detectImageMimeFromBytes(bytes: Uint8Array): "image/jpeg" | "image/png" | "image/webp" | null {
   if (bytes.length < 12) return null;
 
-  // JPEG: FF D8 FF
-  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-    return "image/jpeg";
-  }
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
 
-  // PNG: 89 50 4E 47 0D 0A 1A 0A
   if (
     bytes[0] === 0x89 &&
     bytes[1] === 0x50 &&
@@ -29,7 +31,6 @@ export function detectImageMimeFromBytes(bytes: Uint8Array): "image/jpeg" | "ima
     return "image/png";
   }
 
-  // WebP: "RIFF" .... "WEBP"
   if (
     bytes[0] === 0x52 &&
     bytes[1] === 0x49 &&
@@ -44,6 +45,49 @@ export function detectImageMimeFromBytes(bytes: Uint8Array): "image/jpeg" | "ima
   }
 
   return null;
+}
+
+export async function GET(request: Request) {
+  const sessionUser = await getSessionUser(request);
+  if (!sessionUser) {
+    return NextResponse.json({ message: "Требуется вход в аккаунт." }, { status: 401 });
+  }
+
+  const avatarKey = sessionUser.avatarKey;
+  if (!avatarKey || !isOwnedAvatarKey(avatarKey, sessionUser.userId)) {
+    return new Response(null, { status: 404 });
+  }
+
+  try {
+    const store = getStore({ name: AVATAR_STORE, consistency: "strong" });
+    const avatar = await store.getWithMetadata(avatarKey, {
+      type: "arrayBuffer",
+      consistency: "strong",
+    });
+
+    if (!avatar || !avatar.data) return new Response(null, { status: 404 });
+
+    const mimeType = avatar.metadata.mimeType;
+    if (
+      avatar.metadata.userId !== sessionUser.userId ||
+      (mimeType !== "image/jpeg" && mimeType !== "image/png" && mimeType !== "image/webp")
+    ) {
+      return new Response(null, { status: 404 });
+    }
+
+    return new Response(avatar.data, {
+      headers: {
+        "Cache-Control": "private, no-store",
+        "Content-Type": mimeType,
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch {
+    return NextResponse.json(
+      { message: "Не удалось открыть фото из Netlify Blobs." },
+      { status: 503 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
@@ -83,20 +127,46 @@ export async function POST(request: Request) {
 
   const ext = detectedMime === "image/png" ? "png" : detectedMime === "image/webp" ? "webp" : "jpg";
   const randomKey = `avatars/${sessionUser.userId}/${randomBytes(12).toString("hex")}.${ext}`;
+  let store: ReturnType<typeof getStore>;
 
-  const db = getDatabase();
-  await db
-    .update(profiles)
-    .set({
-      avatarKey: randomKey,
-      updatedAt: new Date(),
-    })
-    .where(eq(profiles.userId, sessionUser.userId));
+  try {
+    store = getStore({ name: AVATAR_STORE, consistency: "strong" });
+    await store.set(randomKey, file, {
+      metadata: { mimeType: detectedMime, userId: sessionUser.userId },
+    });
+  } catch {
+    return NextResponse.json(
+      { message: "Хранилище Netlify Blobs недоступно. При локальной проверке используйте Netlify CLI." },
+      { status: 503 },
+    );
+  }
+
+  try {
+    const db = getDatabase();
+    await db
+      .update(profiles)
+      .set({
+        avatarKey: randomKey,
+        updatedAt: new Date(),
+      })
+      .where(eq(profiles.userId, sessionUser.userId));
+  } catch {
+    await store.delete(randomKey).catch(() => undefined);
+    return NextResponse.json(
+      { message: "Фото сохранено, но профиль не обновился. Попробуйте ещё раз." },
+      { status: 500 },
+    );
+  }
+
+  const oldAvatarKey = sessionUser.avatarKey;
+  if (oldAvatarKey && oldAvatarKey !== randomKey && isOwnedAvatarKey(oldAvatarKey, sessionUser.userId)) {
+    await store.delete(oldAvatarKey).catch(() => undefined);
+  }
 
   return NextResponse.json({
     avatarKey: randomKey,
     mimeType: detectedMime,
-    message: "Фото профиля обновлено.",
+    message: "Фото профиля сохранено.",
   });
 }
 
@@ -114,6 +184,15 @@ export async function DELETE(request: Request) {
       updatedAt: new Date(),
     })
     .where(eq(profiles.userId, sessionUser.userId));
+
+  const avatarKey = sessionUser.avatarKey;
+  if (avatarKey && isOwnedAvatarKey(avatarKey, sessionUser.userId)) {
+    try {
+      await getStore({ name: AVATAR_STORE, consistency: "strong" }).delete(avatarKey);
+    } catch {
+      // A stale key can be cleared from the profile even when its blob no longer exists.
+    }
+  }
 
   return NextResponse.json({
     avatarKey: null,
