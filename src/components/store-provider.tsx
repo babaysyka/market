@@ -9,6 +9,7 @@ export type StoreUser = {
   email: string;
   phone?: string | null;
   avatarKey?: string | null;
+  avatarUrl?: string | null;
   role?: "customer" | "admin";
   telegramId?: string;
 };
@@ -36,6 +37,17 @@ const COMPARE_KEY = "electromarket-compare";
 const USER_KEY = "electromarket-user";
 const STORE_EVENT = "electromarket-store-change";
 export const COMPARE_LIMIT = 4;
+
+function isTrustedGoogleAvatarUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    return url.protocol === "https:" && (host === "googleusercontent.com" || host.endsWith(".googleusercontent.com"));
+  } catch {
+    return false;
+  }
+}
 
 function subscribe(callback: () => void) {
   window.addEventListener("storage", callback);
@@ -97,6 +109,7 @@ function parseUser(snapshot: string): StoreUser | null {
           email: user.email,
           phone: typeof user.phone === "string" ? user.phone : null,
           avatarKey: typeof user.avatarKey === "string" ? user.avatarKey : null,
+          ...(isTrustedGoogleAvatarUrl(user.avatarUrl) ? { avatarUrl: user.avatarUrl } : {}),
           role: user.role === "admin" ? "admin" : "customer",
           ...(typeof user.telegramId === "string" ? { telegramId: user.telegramId } : {}),
         }
@@ -157,7 +170,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { user?: StoreUser | null } | null) => {
         if (data?.user?.email && data.user.name) {
-          writeSnapshot(USER_KEY, data.user);
+          const currentUser = parseUser(readSnapshot(USER_KEY));
+          const avatarUrl = data.user.avatarUrl ?? (
+            currentUser?.email === data.user.email ? currentUser.avatarUrl : undefined
+          );
+          writeSnapshot(USER_KEY, { ...data.user, ...(avatarUrl ? { avatarUrl } : {}) });
         }
       })
       .catch(() => {
@@ -229,7 +246,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     },
     setAuthenticatedUser(nextUser) {
       syncedEmailRef.current = null;
-      writeSnapshot(USER_KEY, nextUser);
+      const currentUser = parseUser(readSnapshot(USER_KEY));
+      const avatarUrl = nextUser.avatarUrl ?? (
+        currentUser?.email === nextUser.email ? currentUser.avatarUrl : undefined
+      );
+      writeSnapshot(USER_KEY, { ...nextUser, ...(avatarUrl ? { avatarUrl } : {}) });
     },
     signOut() {
       try {

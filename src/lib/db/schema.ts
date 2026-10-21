@@ -7,6 +7,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
   serial,
   text,
@@ -288,11 +289,15 @@ export const payments = pgTable(
     orderId: text("order_id")
       .notNull()
       .references(() => orders.id, { onDelete: "cascade" }),
-    provider: text("provider").notNull().default("yookassa_test"),
+    provider: text("provider").notNull().default("stripe_test"),
     amountUzs: bigint("amount_uzs", { mode: "number" }).notNull(),
-    amountRubMinor: integer("amount_rub_minor").notNull(),
-    currency: text("currency").notNull().default("RUB"),
-    exchangeRateUzsPerRub: integer("exchange_rate_uzs_per_rub").notNull().default(140),
+    amountMinor: integer("amount_minor").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    exchangeRateUzsPerUnit: numeric("exchange_rate_uzs_per_unit", {
+      precision: 12,
+      scale: 4,
+      mode: "number",
+    }).notNull(),
     status: text("status").notNull().default("pending"),
     isTest: boolean("is_test").notNull().default(true),
     idempotencyKey: text("idempotency_key").notNull(),
@@ -305,7 +310,13 @@ export const payments = pgTable(
     uniqueIndex("payments_idempotency_key_unique").on(table.idempotencyKey),
     index("payments_order_id_idx").on(table.orderId),
     check("payments_amount_uzs_positive", sql`${table.amountUzs} > 0`),
+    check("payments_amount_minor_positive", sql`${table.amountMinor} > 0`),
+    check("payments_exchange_rate_positive", sql`${table.exchangeRateUzsPerUnit} > 0`),
     check("payments_is_test_only", sql`${table.isTest} = true`),
+    check(
+      "payments_provider_test_only",
+      sql`${table.provider} = 'stripe_test'`,
+    ),
   ],
 );
 

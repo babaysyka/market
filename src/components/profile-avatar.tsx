@@ -7,8 +7,12 @@ import { useState } from "react";
 type ProfileAvatarProps = {
   name: string;
   avatarKey?: string | null;
+  avatarUrl?: string | null;
   src?: string | null;
   size?: number;
+  shape?: "rounded" | "circle";
+  responsive?: boolean;
+  className?: string;
   preview?: boolean;
   onImageError?: () => void;
 };
@@ -16,8 +20,12 @@ type ProfileAvatarProps = {
 export function ProfileAvatar({
   name,
   avatarKey,
+  avatarUrl,
   src,
   size = 62,
+  shape = "rounded",
+  responsive = false,
+  className,
   preview = false,
   onImageError,
 }: ProfileAvatarProps) {
@@ -27,21 +35,27 @@ export function ProfileAvatar({
     .map((part) => part[0])
     .join("")
     .toLocaleUpperCase("ru");
-  const imageSrc = src ?? (avatarKey ? `/api/account/avatar?v=${encodeURIComponent(avatarKey)}` : null);
+  const imageSrc = src ?? (avatarKey ? `/api/account/avatar?v=${encodeURIComponent(avatarKey)}` : avatarUrl ?? null);
   const [failedSource, setFailedSource] = useState<string | null>(null);
   const [loadedSource, setLoadedSource] = useState<string | null>(null);
-  const style = { width: size, height: size, borderRadius: size <= 72 ? 19 : 22 };
+  const borderRadius = shape === "circle" ? "50%" : size <= 72 ? 19 : 22;
+  const style = {
+    ...(responsive ? {} : { width: size, height: size }),
+    borderRadius,
+  };
+  const responsiveClass = responsive ? " profile-avatar-responsive" : "";
+  const extraClass = className ? ` ${className}` : "";
 
   if (imageSrc && failedSource !== imageSrc) {
     return (
-      <span className="profile-avatar-frame" style={style}>
-        <span className="avatar-placeholder profile-avatar-fallback" style={style} aria-hidden="true">
+      <span className={`profile-avatar-frame${responsiveClass}${extraClass}`} style={style}>
+        <span className={`avatar-placeholder profile-avatar-fallback${responsiveClass}${extraClass}`} style={style} aria-hidden="true">
           {initials || <UserCircle size={25} />}
         </span>
         <Image
           className="profile-avatar-photo"
-          src={imageSrc}
           alt={preview ? "Предпросмотр фото профиля" : `Фото профиля: ${name}`}
+          src={imageSrc}
           width={size}
           height={size}
           unoptimized
@@ -58,7 +72,7 @@ export function ProfileAvatar({
 
   return (
     <span
-      className="avatar-placeholder"
+      className={`avatar-placeholder${responsiveClass}${extraClass}`}
       aria-label={`Профиль ${name}`}
       style={style}
     >

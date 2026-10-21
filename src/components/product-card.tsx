@@ -2,22 +2,22 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowsLeftRight, Basket, Heart, Star } from "@phosphor-icons/react";
+import { ArrowsLeftRight, Basket, Check, Heart, Star } from "@phosphor-icons/react";
 import { useState } from "react";
 import { formatPrice, type Product } from "@/data/catalog";
 import { useStore } from "@/components/store-provider";
+import { useCartFeedback } from "@/components/use-cart-feedback";
 
 export function ProductCard({ product }: { product: Product }) {
   const { addToCart, compareIds, favorites, toggleCompare, toggleFavorite } = useStore();
-  const [added, setAdded] = useState(false);
+  const { added, animationKey, showAdded } = useCartFeedback();
   const [compareNotice, setCompareNotice] = useState("");
   const favorite = favorites.includes(product.id);
   const compared = compareIds.includes(product.id);
 
   function handleAdd() {
     addToCart(product.id);
-    setAdded(true);
-    window.setTimeout(() => setAdded(false), 1500);
+    showAdded();
   }
 
   function handleCompare() {
@@ -47,7 +47,9 @@ export function ProductCard({ product }: { product: Product }) {
       {compareNotice && <span className="compare-notice" role="status">{compareNotice}</span>}
       <div className="product-price-row"><div><strong>{formatPrice(product.price)}</strong>{product.oldPrice && <del>{formatPrice(product.oldPrice)}</del>}</div>
         <button className={`add-icon-button ${added ? "added" : ""}`} type="button" aria-label={added ? "Добавлено в корзину" : `Добавить ${product.name} в корзину`} disabled={!product.inStock} onClick={handleAdd}>
-          <Basket size={18} weight={added ? "fill" : "regular"} />
+          <span className={`cart-add-icon ${added ? "is-added" : ""}`} key={animationKey} aria-hidden="true">
+            {added ? <Check size={18} weight="bold" /> : <Basket size={18} weight="regular" />}
+          </span>
         </button>
       </div>
     </div>

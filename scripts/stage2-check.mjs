@@ -69,11 +69,11 @@ await db.execute(sql`
     id serial primary key,
     provider_payment_id text not null,
     order_id text not null references orders(id) on delete cascade,
-    provider text not null default 'yookassa_test',
+    provider text not null default 'stripe_test',
     amount_uzs bigint not null,
-    amount_rub_minor integer not null,
-    currency text not null default 'RUB',
-    exchange_rate_uzs_per_rub integer not null default 140,
+    amount_minor integer not null,
+    currency text not null default 'USD',
+    exchange_rate_uzs_per_unit numeric(12, 4) not null,
     status text not null default 'pending',
     is_test boolean not null default true,
     idempotency_key text not null,
@@ -81,6 +81,9 @@ await db.execute(sql`
     webhook_verified_at timestamptz,
     created_at timestamptz not null default now(),
     constraint payments_amount_uzs_positive check (amount_uzs > 0),
+    constraint payments_amount_minor_positive check (amount_minor > 0),
+    constraint payments_exchange_rate_positive check (exchange_rate_uzs_per_unit > 0),
+    constraint payments_provider_test_only check (provider = 'stripe_test'),
     constraint payments_is_test_only check (is_test = true)
   )
 `);
@@ -242,19 +245,19 @@ if (Number(auditRes.rows[0].count) < 1) {
 }
 console.log("3. [DB-08 / DB-09] Admin role protection & audit log recording verified.");
 
-// 4. Check DB-10 & DB-11: YooKassa TEST payment creation, return-page non-confirmation & duplicate webhook idempotency
-const testPaymentId = "yk_test_stage2_payment_01";
-const testPaymentIdem = "idem_yk_test_payment_01";
-const expectedRubMinor = Math.round((calculatedOrderTotal / 140) * 100);
+// 4. Check DB-10 & DB-11: Stripe TEST payment state, return-page non-confirmation & duplicate webhook idempotency
+const testPaymentId = "stripe_test_stage2_payment_01";
+const testPaymentIdem = "idem_stripe_test_payment_01";
+const expectedUsdMinor = Math.round((calculatedOrderTotal / 12_000) * 100);
 
 await db.execute(sql`
   insert into payments (
-    provider_payment_id, order_id, provider, amount_uzs, amount_rub_minor,
-    currency, exchange_rate_uzs_per_rub, status, is_test, idempotency_key, confirmation_url
+    provider_payment_id, order_id, provider, amount_uzs, amount_minor,
+    currency, exchange_rate_uzs_per_unit, status, is_test, idempotency_key, confirmation_url
   )
   values (
-    ${testPaymentId}, ${stage2OrderId}, 'yookassa_test', ${calculatedOrderTotal},
-    ${expectedRubMinor}, 'RUB', 140, 'pending', true, ${testPaymentIdem},
+    ${testPaymentId}, ${stage2OrderId}, 'stripe_test', ${calculatedOrderTotal},
+    ${expectedUsdMinor}, 'USD', 12_000, 'pending', true, ${testPaymentIdem},
     '/checkout?order=EM-STG201'
   )
   on conflict (idempotency_key) do nothing
@@ -297,7 +300,7 @@ const afterWebhookRes = await db.execute(
 if (String(afterWebhookRes.rows[0].payment_status) !== "paid") {
   throw new Error("DB-10 webhook did not update order payment_status to paid.");
 }
-console.log("4. [DB-10 / DB-11] YooKassa TEST payment & duplicate webhook idempotency verified.");
+console.log("4. [DB-10 / DB-11] Stripe TEST payment state & duplicate webhook idempotency verified.");
 
 // Cleanup test fixtures
 await db.execute(sql`delete from admin_audit_logs where target_id = ${stage2OrderId}`);

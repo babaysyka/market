@@ -3,7 +3,7 @@
 import Script from "next/script";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useStore } from "@/components/store-provider";
+import { useStore, type StoreUser } from "@/components/store-provider";
 
 type GoogleCredentialResponse = { credential: string };
 
@@ -61,7 +61,7 @@ export function GoogleSignInButton({ onMessage }: { onMessage: (message: string)
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ credential }),
           });
-          const result: { user?: { name: string; email: string }; error?: string } = await response.json();
+          const result: { user?: StoreUser; error?: string } = await response.json();
           if (!response.ok || !result.user) throw new Error(result.error || "Не удалось войти через Google.");
           setAuthenticatedUser(result.user);
           router.replace(getSafeNextPath());

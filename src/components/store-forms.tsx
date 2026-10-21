@@ -157,15 +157,15 @@ export function AuthForm({ mode }: { mode: "sign-in" | "register" }) {
 
 export function CheckoutForm({
   onComplete,
+  children,
 }: {
-  onComplete: (orderId: string) => void;
+  onComplete: (orderId: string, orderAccessKey: string) => void;
+  children?: React.ReactNode;
 }) {
   const { cart, user, clearCart } = useStore();
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const idempotencyKeyRef = useRef(
-    `ord_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-  );
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -175,6 +175,8 @@ export function CheckoutForm({
     setErrorMessage("");
 
     const formData = new FormData(event.currentTarget);
+    const idempotencyKey = idempotencyKeyRef.current ?? globalThis.crypto.randomUUID();
+    idempotencyKeyRef.current = idempotencyKey;
     const name = String(formData.get("name") ?? "").trim();
     const phone = String(formData.get("phone") ?? "").trim();
     const address = String(formData.get("address") ?? "").trim();
@@ -192,7 +194,7 @@ export function CheckoutForm({
           phone,
           address,
           source: isMiniApp ? "telegram_mini_app" : "web",
-          idempotencyKey: idempotencyKeyRef.current,
+          idempotencyKey,
           items: cart,
         }),
       });
@@ -211,7 +213,7 @@ export function CheckoutForm({
       }
 
       clearCart();
-      onComplete(payload.order.id);
+      onComplete(payload.order.id, idempotencyKey);
     } catch {
       setErrorMessage("Ошибка соединения с сервером. Проверьте сеть и нажмите ещё раз.");
       setSubmitting(false);
@@ -255,6 +257,7 @@ export function CheckoutForm({
           {errorMessage}
         </p>
       )}
+      {children}
       <button
         className="button button-primary button-wide"
         type="submit"
@@ -416,6 +419,7 @@ export function SettingsForm() {
       <ProfileAvatar
         name={user?.name ?? "Профиль"}
         avatarKey={user?.avatarKey}
+        avatarUrl={user?.avatarUrl}
         src={avatarPreview}
         size={76}
         preview={Boolean(avatarPreview)}
@@ -426,7 +430,7 @@ export function SettingsForm() {
         <p>
           {avatarPreview
             ? "После сохранения фото появится в вашем аккаунте."
-            : user?.avatarKey && !savedAvatarUnavailable
+            : (user?.avatarKey || user?.avatarUrl) && !savedAvatarUnavailable
               ? "Это фото видно в личном кабинете."
               : "Фото пока не отображается. Выберите файл, чтобы загрузить его заново."}
         </p>
@@ -437,7 +441,7 @@ export function SettingsForm() {
         </button>
       )}
     </div>
-    <label className="upload-field">Фото профиля (JPEG, PNG, WebP до 2 МБ)<span><CloudArrowUp size={18} /> {avatarFilename || (user?.avatarKey ? "Выбрать другое фото" : "Выбрать изображение")}<input ref={avatarInputRef} name="avatar" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleAvatarChange} /></span></label>
+    <label className="upload-field">Фото профиля (JPEG, PNG, WebP до 2 МБ)<span><CloudArrowUp size={18} /> {avatarFilename || (user?.avatarKey || user?.avatarUrl ? "Выбрать другое фото" : "Выбрать изображение")}<input ref={avatarInputRef} name="avatar" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleAvatarChange} /></span></label>
     {avatarError && <p className="form-message is-error" role="alert">{avatarError}</p>}
     <div className="hero-cta-row">
       <button className="button button-primary" type="submit" disabled={saving}>

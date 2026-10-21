@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowRight, SignOut } from "@phosphor-icons/react";
-import { useEffect, useSyncExternalStore } from "react";
+import { ArrowRight, SignOut, X } from "@phosphor-icons/react";
+import { createPortal } from "react-dom";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import { useStore } from "@/components/store-provider";
 
@@ -36,17 +37,85 @@ export function AccountGate({ children }: { children: React.ReactNode }) {
 export function ProfileIdentity() {
   const { user, signOut } = useStore();
   const router = useRouter();
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const closeAvatarButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!avatarOpen) return;
+
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeAvatarButtonRef.current?.focus();
+
+    function handleModalKeys(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setAvatarOpen(false);
+      } else if (event.key === "Tab") {
+        event.preventDefault();
+        closeAvatarButtonRef.current?.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleModalKeys);
+    return () => {
+      document.removeEventListener("keydown", handleModalKeys);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
+    };
+  }, [avatarOpen]);
+
   if (!user) return null;
+  const hasAvatar = Boolean(user.avatarKey || user.avatarUrl);
 
   return <>
     <div className="profile-summary">
-      <ProfileAvatar name={user.name} avatarKey={user.avatarKey} />
+      {hasAvatar ? (
+        <button
+          className="profile-avatar-trigger"
+          type="button"
+          aria-label={`Увеличить фото профиля: ${user.name}`}
+          onClick={() => setAvatarOpen(true)}
+        >
+          <ProfileAvatar name={user.name} avatarKey={user.avatarKey} avatarUrl={user.avatarUrl} />
+        </button>
+      ) : <ProfileAvatar name={user.name} />}
       <div><strong>{user.name}</strong><p>{user.email}</p></div>
       <button className="button button-outline sign-out-button" type="button" onClick={() => { signOut(); router.replace("/account/sign-in"); }}>
         <SignOut size={17} />Выйти
       </button>
     </div>
     <p className="auth-switch account-security-note"><ArrowRight size={15} />Личные разделы доступны после входа в аккаунт.</p>
+    {avatarOpen && hasAvatar && typeof document !== "undefined" && createPortal(
+      <div
+        className="avatar-lightbox"
+        role="presentation"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setAvatarOpen(false);
+        }}
+      >
+        <section className="avatar-lightbox-dialog" role="dialog" aria-modal="true" aria-label={`Фото профиля: ${user.name}`}>
+          <button
+            className="avatar-lightbox-close"
+            type="button"
+            aria-label="Закрыть фото профиля"
+            onClick={() => setAvatarOpen(false)}
+            ref={closeAvatarButtonRef}
+          >
+            <X size={21} aria-hidden="true" />
+          </button>
+          <ProfileAvatar
+            name={user.name}
+            avatarKey={user.avatarKey}
+            avatarUrl={user.avatarUrl}
+            size={640}
+            responsive
+            className="avatar-lightbox-image"
+          />
+        </section>
+      </div>,
+      document.body,
+    )}
   </>;
 }
 

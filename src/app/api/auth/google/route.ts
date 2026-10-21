@@ -16,8 +16,22 @@ type GoogleClaims = {
   iat?: number;
   iss?: string;
   name?: string;
+  picture?: string;
   sub?: string;
 };
+
+function getTrustedGoogleAvatarUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    return url.protocol === "https:" && (host === "googleusercontent.com" || host.endsWith(".googleusercontent.com"))
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(request: NextRequest) {
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
@@ -80,9 +94,11 @@ export async function POST(request: NextRequest) {
 
     const email = claims.email.toLowerCase();
     const displayName = claims.name?.trim() || email;
+    const avatarUrl = getTrustedGoogleAvatarUrl(claims.picture);
     const fallbackUserId = resolveUserIdFromEmail(email);
     let resolvedUserId = fallbackUserId;
     let role: "customer" | "admin" = "customer";
+    let existingProfile: typeof profiles.$inferSelect | undefined;
 
     if (process.env.DATABASE_URL) {
       const db = getDatabase();
@@ -107,6 +123,7 @@ export async function POST(request: NextRequest) {
         .where(eq(profiles.email, email))
         .limit(1);
 
+      existingProfile = existing;
       resolvedUserId = existing?.userId ?? fallbackUserId;
 
       await db
@@ -130,6 +147,9 @@ export async function POST(request: NextRequest) {
         userId: resolvedUserId,
         name: displayName,
         email,
+        phone: existingProfile?.phone ?? null,
+        avatarKey: existingProfile?.avatarKey ?? null,
+        ...(avatarUrl ? { avatarUrl } : {}),
         role,
       },
       sessionToken,

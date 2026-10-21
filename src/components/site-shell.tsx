@@ -23,6 +23,7 @@ import {
   UserCircle,
 } from "@phosphor-icons/react";
 import { categories, products } from "@/data/catalog";
+import { ProfileAvatar } from "@/components/profile-avatar";
 import { useStore } from "@/components/store-provider";
 
 const categoryIcons = {
@@ -106,7 +107,12 @@ export function SiteHeader() {
         <kbd>↵</kbd>
       </form>
       <nav className="header-actions" aria-label="Личный раздел">
-      <Link href={user ? "/account/profile" : "/account/sign-in?next=/account/profile"} className="header-action"><UserCircle size={20} weight="regular" /><span>{user ? "Профиль" : "Войти"}</span></Link>
+      <Link href={user ? "/account/profile" : "/account/sign-in?next=/account/profile"} className="header-action">
+        {user
+          ? <ProfileAvatar name={user.name} avatarKey={user.avatarKey} avatarUrl={user.avatarUrl} size={30} shape="circle" className="header-profile-avatar" />
+          : <UserCircle size={20} weight="regular" />}
+        <span>{user ? "Профиль" : "Войти"}</span>
+      </Link>
       <Link href="/compare" className="header-action action-count" aria-label={compareIds.length ? "Сравнение, " + compareIds.length + " товаров" : "Сравнение"}>
         <ArrowsLeftRight size={20} weight="regular" /><span>Сравнение</span>{compareIds.length > 0 && <b>{compareIds.length}</b>}
       </Link>
