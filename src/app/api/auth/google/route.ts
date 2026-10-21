@@ -22,7 +22,8 @@ type GoogleClaims = {
 export async function POST(request: NextRequest) {
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   if (!clientId) return NextResponse.json({ error: "Вход через Google пока не настроен." }, { status: 503 });
-  if (request.headers.get("origin") !== request.nextUrl.origin) {
+  const expectedOrigin = process.env.URL ? new URL(process.env.URL).origin : request.nextUrl.origin;
+  if (request.headers.get("origin") !== expectedOrigin) {
     return NextResponse.json({ error: "Источник запроса не подтверждён." }, { status: 403 });
   }
 
